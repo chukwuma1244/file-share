@@ -215,6 +215,38 @@ const downloadFile = async (key) => {
   }
 }
 
+const deleteFile = async (fileId, s3Key) => {
+  try {
+    const client = generateClient();
+
+    const result = await client.graphql({
+      query: `
+        mutation DeleteFile($fileId: ID!, $s3Key: String!) {
+          deleteFile(fileId: $fileId, s3Key: $s3Key)
+        }
+      `,
+      variables: {
+        fileId,
+        s3Key
+      },
+      authMode: "userPool"
+    });
+
+    console.log("DELETE RESULT:", result);
+
+    if (!result.data?.deleteFile) {
+      throw new Error("Delete returned null");
+    }
+    alert("File deleted successfully");
+
+    await getFiles();
+  } catch (error) {
+    console.error("DELETE ERROR:", error);
+    alert("Delete failed");
+  }
+};
+
+
 
   return (
     <div className="app">
@@ -273,6 +305,11 @@ const downloadFile = async (key) => {
         <button onClick={() => downloadFile(file.s3Key)}>
           Download
         </button>
+
+        <button onClick={() => deleteFile(file.fileId, file.s3Key)}>
+          Delete
+        </button>
+
       </div>
     ))
   ) : (
