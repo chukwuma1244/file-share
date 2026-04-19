@@ -14,6 +14,8 @@ function App() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loggedIn, setLoggedIn] = useState(false)
+  const [comments, setComments] = useState({});
+  const [commentInputs, setCommentInputs] = useState({});
   const [files, setFiles] = useState([])
   const fileInputRef = useRef(null)
   
@@ -187,6 +189,84 @@ const getFiles = async () => {
   }
 }
 
+const addComment = async (fileId) => {
+  try {
+    const text = commentInputs[fileId];
+
+    if (!text || !text.trim()) {
+      alert("Enter a comment");
+      return;
+    }
+
+    const user = await getCurrentUser();
+    const client = generateClient();
+
+    const result = await client.graphql({
+      query: `
+        mutation AddComment($fileId: String!, $userId: String!, $text: String!) {
+          addComment(fileId: $fileId, userId: $userId, text: $text) {
+            commentId
+            fileId
+            userId
+            text
+            timestamp
+          }
+        }
+      `,
+      variables: {
+        fileId,
+        userId: user.username,
+        text,
+      },
+      authMode: "userPool",
+    });
+
+    console.log("ADD COMMENT RESULT:", result);
+
+    setCommentInputs((prev) => ({
+      ...prev,
+      [fileId]: "",
+    }));
+
+    await getComments(fileId);
+  } catch (error) {
+    console.error("ADD COMMENT ERROR:", error);
+    alert("Add comment failed");
+  }
+};
+
+const getComments = async (fileId) => {
+  try {
+    const client = generateClient();
+
+    const result = await client.graphql({
+      query: `
+        query GetComments($fileId: String!) {
+          getComments(fileId: $fileId) {
+            commentId
+            fileId
+            userId
+            text
+            timestamp
+          }
+        }
+      `,
+      variables: { fileId },
+      authMode: "userPool",
+    });
+
+    console.log("GET COMMENTS RESULT:", result);
+
+    setComments((prev) => ({
+      ...prev,
+      [fileId]: result.data.getComments || [],
+    }));
+  } catch (error) {
+    console.error("GET COMMENTS ERROR:", error);
+    alert("Get comments failed");
+  }
+};
+
 const downloadFile = async (key) => {
   try {
     const client = generateClient()
@@ -309,6 +389,55 @@ const deleteFile = async (fileId, s3Key) => {
         <button onClick={() => deleteFile(file.fileId, file.s3Key)}>
           Delete
         </button>
+
+        <div style={{ marginTop: "10px" }}>
+  <input
+    type="text"
+    placeholder="Add comment"
+    value={commentInputs[file.fileId] || ""}
+    onChange={(e) =>
+      setCommentInputs((prev) => ({
+        ...prev,
+        [file.fileId]: e.target.value,
+      }))
+    }
+    style={{
+      padding: "8px",
+      width: "100%",
+      marginBottom: "8px",
+      borderRadius: "6px",
+      border: "1px solid #ccc"
+    }}
+  />
+
+  <button onClick={() => addComment(file.fileId)}>
+    Add Comment
+  </button>
+
+  <button
+    onClick={() => getComments(file.fileId)}
+    style={{ marginLeft: "8px" }}
+  >
+    Load Comments
+  </button>
+
+  <div style={{ marginTop: "10px" }}>
+    {(comments[file.fileId] || []).map((comment) => (
+      <div
+        key={comment.commentId}
+        style={{
+          background: "#f4f4f4",
+          color: "black",
+          padding: "8px",
+          borderRadius: "6px",
+          marginBottom: "6px"
+        }}
+      >
+        <strong>{comment.userId}</strong>: {comment.text}
+      </div>
+    ))}
+  </div>
+</div>
 
       </div>
     ))
