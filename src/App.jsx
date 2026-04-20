@@ -283,7 +283,7 @@ function App() {
         Upload File
       </button>
 
-      <button onClick={getFiles}>Get Files</button>
+      <button onClick={getFiles}>View Shared Files</button>
 
       {files.map((file) => (
         <div key={file.fileId}>
