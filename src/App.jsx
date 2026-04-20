@@ -121,22 +121,25 @@ function App() {
 
   const getFiles = async () => {
     try {
-      const user = await getCurrentUser()
       const client = generateClient()
 
       const result = await client.graphql({
         query: `
-          query GetFiles($userId: String!) {
-            getFiles(userId: $userId) {
+          query GetFiles {
+            getFiles {
               fileId
               fileName
               s3Key
+              userId
+              createdAt
+              version
             }
           }
         `,
-        variables: { userId: user.userId },
         authMode: 'userPool',
       })
+      console.log("GRAPHQL RESULT:", result)
+
 
       setFiles(result.data.getFiles || [])
     } catch (error) {
@@ -293,6 +296,7 @@ function App() {
           <button onClick={() => deleteFile(file.fileId, file.s3Key)}>
             Delete
           </button>
+          
 
           <input
             placeholder="Comment"
