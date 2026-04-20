@@ -1,24 +1,27 @@
-import { useState } from 'react'
-import { useRef } from 'react'
-import { useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import './App.css'
-import { signIn, signOut } from 'aws-amplify/auth'
-import { fetchAuthSession } from 'aws-amplify/auth'
-import { generateClient } from 'aws-amplify/api'
-import { getCurrentUser } from 'aws-amplify/auth'
-import { confirmSignIn } from 'aws-amplify/auth'
-import { uploadData } from 'aws-amplify/storage'
 
+import {
+  signIn,
+  signOut,
+  fetchAuthSession,
+  getCurrentUser,
+  confirmSignIn
+} from 'aws-amplify/auth'
+
+import { generateClient } from 'aws-amplify/api'
+import { uploadData } from 'aws-amplify/storage'
 
 function App() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loggedIn, setLoggedIn] = useState(false)
-  const [comments, setComments] = useState({});
-  const [commentInputs, setCommentInputs] = useState({});
+  const [comments, setComments] = useState({})
+  const [commentInputs, setCommentInputs] = useState({})
   const [files, setFiles] = useState([])
+
   const fileInputRef = useRef(null)
-  
+
   useEffect(() => {
     const checkUser = async () => {
       try {
@@ -28,51 +31,37 @@ function App() {
         setLoggedIn(false)
       }
     }
-
     checkUser()
   }, [])
-  
 
   const handleLogin = async () => {
     try {
-      const result = await signIn({
-        username,
-        password,
-      })
-
-      console.log('SIGN IN RESULT:', result)
-
-      
+      const result = await signIn({ username, password })
 
       if (result.isSignedIn) {
-  const session = await fetchAuthSession()
-  console.log('SESSION AFTER LOGIN:', session)
-  setLoggedIn(true)
-  alert('Login worked')
-} else {
-  console.log('NEXT STEP:', result.nextStep)
+        await fetchAuthSession()
+        setLoggedIn(true)
+        alert('Login worked')
+      } else {
+        if (
+          result.nextStep?.signInStep ===
+          'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED'
+        ) {
+          const newPassword = prompt('Enter a new password')
 
-  // 🔥 HANDLE NEW PASSWORD REQUIRED
-  if (result.nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
-    const newPassword = prompt('Enter a new password')
+          const confirmResult = await confirmSignIn({
+            challengeResponse: newPassword,
+          })
 
-    const confirmResult = await confirmSignIn({
-      challengeResponse: newPassword
-    })
-
-    console.log('CONFIRM RESULT:', confirmResult)
-
-    if (confirmResult.isSignedIn) {
-      const session = await fetchAuthSession()
-      console.log('SESSION AFTER CONFIRM:', session)
-      setLoggedIn(true)
-      alert('Password updated & logged in')
-    }
-  } else {
-    alert(`Login not complete: ${result.nextStep?.signInStep}`)
-  }
-}
-
+          if (confirmResult.isSignedIn) {
+            await fetchAuthSession()
+            setLoggedIn(true)
+            alert('Password updated & logged in')
+          }
+        } else {
+          alert(`Login not complete: ${result.nextStep?.signInStep}`)
+        }
+      }
     } catch (error) {
       console.error('LOGIN ERROR:', error)
       setLoggedIn(false)
@@ -98,354 +87,234 @@ function App() {
       await uploadData({
         path: `uploads/${file.name}`,
         data: file,
-        options: { contentType: file.type }
+        options: { contentType: file.type },
       }).result
 
-      console.log('S3 upload finsished')
-
       await client.graphql({
-      query: `
-        mutation CreateFileRecord($fileName: String!, $s3Key: String!, $userId: String!) {
-          createFileRecord(fileName: $fileName, s3Key: $s3Key, userId: $userId) {
-            fileId
-            fileName
-            s3Key
-            userId
-            createdAt
-            version
+        query: `
+          mutation CreateFileRecord($fileName: String!, $s3Key: String!, $userId: String!) {
+            createFileRecord(fileName: $fileName, s3Key: $s3Key, userId: $userId) {
+              fileId
+            }
           }
-        }
-      `,
-      variables: {
+        `,
+        variables: {
           fileName: file.name,
           s3Key: `uploads/${file.name}`,
-          userId: user.userId
-      },
-      authMode: 'userPool'
-    })
+          userId: user.userId,
+        },
+        authMode: 'userPool',
+      })
 
-    console.log('Metadata saved')
-
-    alert('Upload successful')
-  } catch (error) {
-    console.error('UPLOAD ERROR:', error)
-    alert('Upload failed')
+      alert('Upload successful')
+    } catch (error) {
+      console.error('UPLOAD ERROR:', error)
+      alert('Upload failed')
+    }
   }
-}
 
-console.log ('typeof uploadFile:', typeof uploadFile)
-
-const handleFileSelect = async (event) => {
-  const file = event.target.files[0]
-  if (!file) return
-  try {
-    console.log('typeof uploadFile:', typeof uploadFile)
-    console.log('selected file:', file)
+  const handleFileSelect = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
     await uploadFile(file)
-    alert('Upload triggered')
-  } catch (error) {
-    console.error('UPLOAD ERROR:', error)
-    alert('Upload failed')
   }
-}
-const getFiles = async () => {
-  try {
-    const session = await fetchAuthSession()
-    console.log('SESSION BEFORE GETFILES:', session)
 
-    const user = await getCurrentUser()
-    console.log('CURRENT USER', user)
+  const getFiles = async () => {
+    try {
+      const user = await getCurrentUser()
+      const client = generateClient()
 
-    const client = generateClient()
-
-    const result = await client.graphql({
-      query: `
-        query GetFiles($userId: String!) {
-          getFiles(userId: $userId) {
-            fileId
-            fileName
-            s3Key
-            userId
-            createdAt
-            version
+      const result = await client.graphql({
+        query: `
+          query GetFiles($userId: String!) {
+            getFiles(userId: $userId) {
+              fileId
+              fileName
+              s3Key
+            }
           }
-        }
-      `,
-      variables: {
-        userId: user.userId,
-      },
-      authMode: 'userPool',
-    })
+        `,
+        variables: { userId: user.userId },
+        authMode: 'userPool',
+      })
 
-
-    console.log('FILES RESULT:', result)
-    console.log('GETFILES ARRAY:', result.data.getFiles)
-    alert(`Files found: ${result.data.getFiles.length}`)
-
-    setFiles(result.data.getFiles || [])
-  } catch (error) {
-    console.error('GET FILES ERROR:', error)
-    alert('Failed to get files')
-  }
-}
-
-const addComment = async (fileId) => {
-  try {
-    const text = commentInputs[fileId];
-
-    if (!text || !text.trim()) {
-      alert("Enter a comment");
-      return;
+      setFiles(result.data.getFiles || [])
+    } catch (error) {
+      console.error(error)
+      alert('Failed to get files')
     }
-
-    const user = await getCurrentUser();
-    const client = generateClient();
-
-    const result = await client.graphql({
-      query: `
-        mutation AddComment($fileId: String!, $userId: String!, $text: String!) {
-          addComment(fileId: $fileId, userId: $userId, text: $text) {
-            commentId
-            fileId
-            userId
-            text
-            timestamp
-          }
-        }
-      `,
-      variables: {
-        fileId,
-        userId: user.username,
-        text,
-      },
-      authMode: "userPool",
-    });
-
-    console.log("ADD COMMENT RESULT:", result);
-
-    setCommentInputs((prev) => ({
-      ...prev,
-      [fileId]: "",
-    }));
-
-    await getComments(fileId);
-  } catch (error) {
-    console.error("ADD COMMENT ERROR:", error);
-    alert("Add comment failed");
   }
-};
 
-const getComments = async (fileId) => {
-  try {
-    const client = generateClient();
+  const addComment = async (fileId) => {
+    try {
+      const text = commentInputs[fileId]
+      if (!text?.trim()) return alert('Enter a comment')
 
-    const result = await client.graphql({
-      query: `
-        query GetComments($fileId: String!) {
-          getComments(fileId: $fileId) {
-            commentId
-            fileId
-            userId
-            text
-            timestamp
+      const user = await getCurrentUser()
+      const client = generateClient()
+
+      await client.graphql({
+        query: `
+          mutation AddComment($fileId: String!, $userId: String!, $text: String!) {
+            addComment(fileId: $fileId, userId: $userId, text: $text) {
+              commentId
+            }
           }
-        }
-      `,
-      variables: { fileId },
-      authMode: "userPool",
-    });
+        `,
+        variables: {
+          fileId,
+          userId: user.username,
+          text,
+        },
+        authMode: 'userPool',
+      })
 
-    console.log("GET COMMENTS RESULT:", result);
-
-    setComments((prev) => ({
-      ...prev,
-      [fileId]: result.data.getComments || [],
-    }));
-  } catch (error) {
-    console.error("GET COMMENTS ERROR:", error);
-    alert("Get comments failed");
-  }
-};
-
-const downloadFile = async (key) => {
-  try {
-    const client = generateClient()
-
-    const result = await client.graphql({
-      query: `
-        query GetDownloadUrl($key: String!) {
-          getDownloadUrl(key: $key) {
-            url
-          }
-        }
-      `,
-      variables: {
-        key,
-      },
-      authMode: 'userPool',
-    })
-
-    console.log('DOWNLOAD RESULT:', result)
-
-    const url = result.data.getDownloadUrl.url
-    window.open(url, '_blank')
-  } catch (error) {
-    console.error('DOWNLOAD ERROR:', error)
-    alert('Download failed')
-  }
-}
-
-const deleteFile = async (fileId, s3Key) => {
-  try {
-    const client = generateClient();
-
-    const result = await client.graphql({
-      query: `
-        mutation DeleteFile($fileId: ID!, $s3Key: String!) {
-          deleteFile(fileId: $fileId, s3Key: $s3Key)
-        }
-      `,
-      variables: {
-        fileId,
-        s3Key
-      },
-      authMode: "userPool"
-    });
-
-    console.log("DELETE RESULT:", result);
-
-    if (!result.data?.deleteFile) {
-      throw new Error("Delete returned null");
+      setCommentInputs((prev) => ({ ...prev, [fileId]: '' }))
+      await getComments(fileId)
+    } catch (error) {
+      console.error(error)
+      alert('Add comment failed')
     }
-    alert("File deleted successfully");
-
-    await getFiles();
-  } catch (error) {
-    console.error("DELETE ERROR:", error);
-    alert("Delete failed");
   }
-};
 
+  const getComments = async (fileId) => {
+    try {
+      const client = generateClient()
 
+      const result = await client.graphql({
+        query: `
+          query GetComments($fileId: String!) {
+            getComments(fileId: $fileId) {
+              commentId
+              userId
+              text
+            }
+          }
+        `,
+        variables: { fileId },
+        authMode: 'userPool',
+      })
+
+      setComments((prev) => ({
+        ...prev,
+        [fileId]: result.data.getComments || [],
+      }))
+    } catch (error) {
+      console.error(error)
+      alert('Get comments failed')
+    }
+  }
+
+  const downloadFile = async (key) => {
+    try {
+      const client = generateClient()
+
+      const result = await client.graphql({
+        query: `
+          query GetDownloadUrl($key: String!) {
+            getDownloadUrl(key: $key) {
+              url
+            }
+          }
+        `,
+        variables: { key },
+        authMode: 'userPool',
+      })
+
+      window.open(result.data.getDownloadUrl.url, '_blank')
+    } catch (error) {
+      console.error(error)
+      alert('Download failed')
+    }
+  }
+
+  const deleteFile = async (fileId, s3Key) => {
+    try {
+      const client = generateClient()
+
+      await client.graphql({
+        query: `
+          mutation DeleteFile($fileId: ID!, $s3Key: String!) {
+            deleteFile(fileId: $fileId, s3Key: $s3Key)
+          }
+        `,
+        variables: { fileId, s3Key },
+        authMode: 'userPool',
+      })
+
+      alert('Deleted')
+      await getFiles()
+    } catch (error) {
+      console.error(error)
+      alert('Delete failed')
+    }
+  }
 
   return (
     <div className="app">
       <h1>File Share Platform</h1>
-      <p>{loggedIn ? 'You are logged in.' : 'Frontend is running.'}</p>
 
-      <div className="card" style={{ flexDirection: 'column', minWidth: '300px' }}>
-        {!loggedIn ? (
-          <>
-            <input
-              type="text"
-              placeholder="Username or email"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <button onClick={handleLogin}>Login</button>
-          </>
-        ) : (
-          <button onClick={handleLogout}>Logout</button>
-        )}
-
+      {!loggedIn ? (
         <>
-  <input
-    type="file"
-    ref={fileInputRef}
-    style={{ display: 'none' }}
-    onChange={handleFileSelect}
-  />
+          <input
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button onClick={handleLogin}>Login</button>
+        </>
+      ) : (
+        <button onClick={handleLogout}>Logout</button>
+      )}
 
-  <button onClick={() => fileInputRef.current.click()}>
-    Upload File
-  </button>
-</>
-        <button onClick={getFiles}>Get Files</button>
-        <div style={{ marginTop: '20px', width: '100%' }}>
-  {files.length > 0 ? (
-    files.map((file) => (
-      <div
-        key={file.fileId}
-        style={{
-          background: 'white',
-          color: 'black',
-          padding: '10px',
-          marginBottom: '10px',
-          borderRadius: '8px'
-        }}
-      >
-        <p>{file.fileName}</p>
+      <input
+        type="file"
+        ref={fileInputRef}
+        hidden
+        onChange={handleFileSelect}
+      />
+      <button onClick={() => fileInputRef.current.click()}>
+        Upload File
+      </button>
 
-        <button onClick={() => downloadFile(file.s3Key)}>
-          Download
-        </button>
+      <button onClick={getFiles}>Get Files</button>
 
-        <button onClick={() => deleteFile(file.fileId, file.s3Key)}>
-          Delete
-        </button>
+      {files.map((file) => (
+        <div key={file.fileId}>
+          <p>{file.fileName}</p>
 
-        <div style={{ marginTop: "10px" }}>
-  <input
-    type="text"
-    placeholder="Add comment"
-    value={commentInputs[file.fileId] || ""}
-    onChange={(e) =>
-      setCommentInputs((prev) => ({
-        ...prev,
-        [file.fileId]: e.target.value,
-      }))
-    }
-    style={{
-      padding: "8px",
-      width: "100%",
-      marginBottom: "8px",
-      borderRadius: "6px",
-      border: "1px solid #ccc"
-    }}
-  />
+          <button onClick={() => downloadFile(file.s3Key)}>Download</button>
+          <button onClick={() => deleteFile(file.fileId, file.s3Key)}>
+            Delete
+          </button>
 
-  <button onClick={() => addComment(file.fileId)}>
-    Add Comment
-  </button>
+          <input
+            placeholder="Comment"
+            value={commentInputs[file.fileId] || ''}
+            onChange={(e) =>
+              setCommentInputs((prev) => ({
+                ...prev,
+                [file.fileId]: e.target.value,
+              }))
+            }
+          />
 
-  <button
-    onClick={() => getComments(file.fileId)}
-    style={{ marginLeft: "8px" }}
-  >
-    Load Comments
-  </button>
+          <button onClick={() => addComment(file.fileId)}>Add</button>
+          <button onClick={() => getComments(file.fileId)}>Load</button>
 
-  <div style={{ marginTop: "10px" }}>
-    {(comments[file.fileId] || []).map((comment) => (
-      <div
-        key={comment.commentId}
-        style={{
-          background: "#f4f4f4",
-          color: "black",
-          padding: "8px",
-          borderRadius: "6px",
-          marginBottom: "6px"
-        }}
-      >
-        <strong>{comment.userId}</strong>: {comment.text}
-      </div>
-    ))}
-  </div>
-</div>
-
-      </div>
-    ))
-  ) : (
-    <p>No files yet</p>
-  )}
-</div>
-      </div>
+          {(comments[file.fileId] || []).map((c) => (
+            <div key={c.commentId}>
+              <strong>{c.userId}</strong>: {c.text}
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   )
 }

@@ -16,11 +16,17 @@ body {
   justify-content: center;
   align-items: center;
   gap: 20px;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .card {
+  width: 100%;
+  max-width: 700px;
   display: flex;
+  flex-direction: column;
   gap: 12px;
+  box-sizing: border-box;
 }
 
 button {
@@ -36,5 +42,77 @@ input {
   border: none;
   border-radius: 8px;
   font-size: 16px;
+  box-sizing: border-box;
 }
+
+.file-card {
+  width: 100%;
+  background: white;
+  color: black;
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  box-sizing: border-box;
+  word-break: break-word;
+}
+
+.file-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.file-actions button {
+  flex: 1;
+  min-width: 120px;
+}
+
+.comment-section {
+  margin-top: 12px;
+}
+
+.comment-input {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.comment-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.comment-item {
+  background: #f3f4f6;
+  color: black;
+  padding: 8px;
+  border-radius: 6px;
+}
+
+@media (max-width: 600px) {
+  .app {
+    padding: 12px;
+  }
+  .card {
+    max-width: 100%;
+  }
+
+  button,
+  input {
+    font-size: 14px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .file-actions {
+    flex-direction: column;
+  }
+
+  .file-actions button {
+    width: 100%;
+  }
+}
+
 
