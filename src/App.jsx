@@ -83,9 +83,10 @@ function App() {
     try {
       const user = await getCurrentUser()
       const client = generateClient()
+      const key = `public/uploads/${file.name}`
 
       await uploadData({
-        path: `uploads/${file.name}`,
+        path: key,
         data: file,
         options: { contentType: file.type },
       }).result
@@ -100,7 +101,7 @@ function App() {
         `,
         variables: {
           fileName: file.name,
-          s3Key: `uploads/${file.name}`,
+          s3Key: key,
           userId: user.userId,
         },
         authMode: 'userPool',
